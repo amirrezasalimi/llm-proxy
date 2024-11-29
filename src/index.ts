@@ -17,7 +17,7 @@ const openai = new OpenAI({
 
 // Authentication middleware
 const authenticateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const apiKey = req.headers['X-API-Key'];
+  const apiKey = req.headers['x-api-key'] as string;
   const configuredApiKey = process.env.API_KEY;
 
   if (!configuredApiKey) {
