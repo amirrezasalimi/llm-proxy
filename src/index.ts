@@ -26,6 +26,7 @@ interface ChatCompletionRequest {
 interface RequestStatus {
   status: "pending" | "processing" | "completed" | "error";
   request: ChatCompletionRequest;
+  webhookUrl?: string;
   response?: any;
   error?: {
     message: string;
@@ -55,6 +56,7 @@ const chatCompletionSchema = z.object({
   stop: z.union([z.string(), z.array(z.string())]).optional(),
   functions: z.array(z.record(z.unknown())).optional(),
   function_call: z.union([z.string(), z.record(z.unknown())]).optional(),
+  webhookUrl: z.string().url().optional(),
 });
 
 // Request queue and concurrency management
@@ -160,11 +162,13 @@ app.post("/v1/chat/completions", async (req, res) => {
   }
 
   const validatedData = result.data;
+  const { webhookUrl, ...chatCompletionParams } = validatedData;
 
   // Store request in memory
   requestStore.set(requestId, {
     status: "pending",
-    request: validatedData,
+    request: chatCompletionParams,
+    webhookUrl,
     timestamp: Date.now(),
   });
 
@@ -224,6 +228,30 @@ app.get("/v1/chat/completions/:requestId", (req, res) => {
   });
 });
 
+async function callWebhook(requestId: string, data: any) {
+  const request = requestStore.get(requestId);
+  if (!request?.webhookUrl) return;
+
+  try {
+    const response = await fetch(request.webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        request_id: requestId,
+        ...data,
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Webhook call failed for ${requestId}:`, await response.text());
+    }
+  } catch (error) {
+    console.error(`Error calling webhook for ${requestId}:`, error);
+  }
+}
+
 async function processRequestWithRetry(
   requestId: string,
   params: ChatCompletionRequest,
@@ -234,10 +262,18 @@ async function processRequestWithRetry(
 
   try {
     request.status = "processing";
-    const completion = await openai.chat.completions.create(params);
+    const completion = await openai.chat.completions.create(params as any);
 
     request.status = "completed";
     request.response = completion;
+    
+    // Call webhook if URL was provided
+    if (request.webhookUrl) {
+      await callWebhook(requestId, {
+        status: "completed",
+        response: completion,
+      });
+    }
   } catch (error: any) {
     console.error(`OpenAI API Error (attempt ${retryCount + 1}/3):`, error);
 
@@ -249,11 +285,18 @@ async function processRequestWithRetry(
 
     request.status = "error";
     request.error = {
-      message:
-        error?.message || "An error occurred while processing your request",
+      message: error?.message || "An error occurred while processing your request",
       type: error?.type || "internal_server_error",
       attempts: retryCount + 1,
     };
+
+    // Call webhook with error if URL was provided
+    if (request.webhookUrl) {
+      await callWebhook(requestId, {
+        status: "error",
+        error: request.error,
+      });
+    }
   }
 }
 

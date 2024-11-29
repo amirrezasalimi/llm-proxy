@@ -8,6 +8,7 @@ A robust Express-based proxy server for managing Large Language Model API reques
 - **Status Tracking**: Monitor request status (pending, processing, completed, error)
 - **Rate Limiting**: Built-in request queue with configurable concurrency
 - **Error Handling**: Automatic retry mechanism for failed requests
+- **Webhook Support**: Optional callbacks when requests complete or fail
 - **OpenAI Integration**: Pre-configured for OpenAI API with customizable endpoints
 - **Type Safety**: Built with TypeScript for robust type checking
 - **Security**: Includes Helmet middleware for enhanced API security
@@ -80,6 +81,7 @@ Request body:
   stop?: string | string[];
   functions?: Array<Record<string, unknown>>;
   function_call?: string | Record<string, unknown>;
+  webhookUrl?: string;       // Optional webhook URL for completion notifications
 }
 ```
 
@@ -150,6 +152,34 @@ Not Found (404):
   "error": {
     "message": "Request not found",
     "type": "request_not_found"
+  }
+}
+```
+
+#### 3. Webhook Notifications
+
+If a `webhookUrl` is provided in the request, the server will send a POST request to that URL when the request is completed or encounters an error.
+
+Successful Completion Webhook:
+```json
+{
+  "request_id": "string",
+  "status": "completed",
+  "response": {
+    // OpenAI completion response
+  }
+}
+```
+
+Error Webhook:
+```json
+{
+  "request_id": "string",
+  "status": "error",
+  "error": {
+    "message": "Error message",
+    "type": "error_type",
+    "attempts": number
   }
 }
 ```
