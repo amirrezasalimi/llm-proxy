@@ -38,6 +38,7 @@ Create a `.env` file in the root directory:
 PORT=3000
 OPENAI_API_KEY=your-api-key-here
 OPENAI_API_BASE_URL=your-endpoint-here
+MAX_CONCURRENT=2
 ```
 
 ## Usage

@@ -7,6 +7,7 @@ import { z } from "zod";
 
 const app = express();
 const port = process.env.PORT || 3000;
+const maxConcurrent = parseInt(process.env.MAX_CONCURRENT || "2", 10);
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -63,8 +64,12 @@ const chatCompletionSchema = z.object({
 class RequestQueue {
   private queue: string[] = [];
   private processing = new Set<string>();
-  private maxConcurrent = 2;
+  private maxConcurrent: number;
   private processingPromises = new Map<string, Promise<void>>();
+
+  constructor(maxConcurrent: number) {
+    this.maxConcurrent = maxConcurrent;
+  }
 
   async add(requestId: string): Promise<void> {
     if (this.processingPromises.size < this.maxConcurrent) {
@@ -120,7 +125,7 @@ class RequestQueue {
   }
 }
 
-const requestQueue = new RequestQueue();
+const requestQueue = new RequestQueue(maxConcurrent);
 
 const requestStore = new Map<string, RequestStatus>();
 
