@@ -11,7 +11,7 @@ A robust Express-based proxy server for managing Large Language Model API reques
 - **Webhook Support**: Optional callbacks when requests complete or fail
 - **OpenAI Integration**: Pre-configured for OpenAI API with customizable endpoints
 - **Type Safety**: Built with TypeScript for robust type checking
-- **Security**: Includes Helmet middleware for enhanced API security
+- **Security**: Includes Helmet middleware and API key authentication for enhanced API security
 
 ## Prerequisites
 
@@ -39,9 +39,20 @@ PORT=3000
 OPENAI_API_KEY=your-api-key-here
 OPENAI_API_BASE_URL=your-endpoint-here
 MAX_CONCURRENT=2
+API_KEY=your-proxy-api-key-here
 ```
 
 ## Usage
+
+### Authentication
+
+All endpoints (except `/health`) require authentication using an API key. Include the API key in your requests using the `X-API-Key` header:
+
+```http
+X-API-Key: your-proxy-api-key-here
+```
+
+Requests without a valid API key will receive a 401 Unauthorized response.
 
 ### API Endpoints
 
@@ -193,7 +204,10 @@ async function chatWithLLM(messages: Array<{ role: string; content: string }>) {
     // Submit request
     const submitResponse = await fetch('http://localhost:3000/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-API-Key': 'your-proxy-api-key-here'
+      },
       body: JSON.stringify({
         model: 'gpt-3.5-turbo',
         messages,
@@ -205,7 +219,11 @@ async function chatWithLLM(messages: Array<{ role: string; content: string }>) {
     
     // Poll for completion
     while (true) {
-      const statusResponse = await fetch(`http://localhost:3000/v1/chat/completions/${request_id}`);
+      const statusResponse = await fetch(`http://localhost:3000/v1/chat/completions/${request_id}`, {
+        headers: { 
+          'X-API-Key': 'your-proxy-api-key-here'
+        }
+      });
       const status = await statusResponse.json();
       
       if (status.status === 'completed') {

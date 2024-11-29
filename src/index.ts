@@ -15,6 +15,32 @@ const openai = new OpenAI({
   baseURL: process.env.OPENAI_API_BASE_URL,
 });
 
+// Authentication middleware
+const authenticateRequest = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const apiKey = req.headers['X-API-Key'];
+  const configuredApiKey = process.env.API_KEY;
+
+  if (!configuredApiKey) {
+    return res.status(500).json({
+      error: {
+        message: "Server configuration error: API key not set",
+        type: "configuration_error"
+      }
+    });
+  }
+
+  if (!apiKey || apiKey !== configuredApiKey) {
+    return res.status(401).json({
+      error: {
+        message: "Invalid or missing API key",
+        type: "authentication_error"
+      }
+    });
+  }
+
+  next();
+};
+
 // Types
 interface ChatCompletionRequest {
   model: string;
@@ -142,8 +168,15 @@ setInterval(() => {
 // Middleware
 app.use(express.json());
 app.use(helmet());
-
 app.use(cors());
+
+// Apply authentication middleware to all routes except health check
+app.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+  authenticateRequest(req, res, next);
+});
 
 // Health check endpoint
 app.get("/health", (req, res) => {
