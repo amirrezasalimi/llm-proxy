@@ -1,11 +1,14 @@
-# Use Alpine as the base image for a lightweight container
-FROM alpine:3.18
+# Use Ubuntu as the base image
+FROM ubuntu:22.04
 
 # Set the working directory
 WORKDIR /app
 
+# Avoid prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
 # Install necessary packages
-RUN apk add --no-cache \
+RUN apt-get update && apt-get install -y \
     tzdata \
     curl \
     ca-certificates \
@@ -15,6 +18,7 @@ RUN apk add --no-cache \
     gcc \
     g++ \
     libstdc++ \
+    && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
 # Install Bun - https://bun.sh/
