@@ -14,10 +14,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     unzip \
     wget \
-    bash \
-    gcc \
-    g++ \
-    libstdc++ \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
