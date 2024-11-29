@@ -12,6 +12,9 @@ RUN apk add --no-cache \
     unzip \
     wget \
     bash \
+    gcc \
+    g++ \
+    libstdc++ \
     && ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
 # Install Bun - https://bun.sh/
