@@ -9,6 +9,14 @@ const app = express();
 const port = process.env.PORT || 3000;
 const maxConcurrent = parseInt(process.env.MAX_CONCURRENT || "2", 10);
 const requestTimeoutMs = parseInt(process.env.REQUEST_TIMEOUT_MS || "300000", 10);
+const isDebugMode = process.env.DEBUG === "true";
+
+// Debug logging utility
+const debugLog = (...args: any[]) => {
+  if (isDebugMode) {
+    console.log("[DEBUG]", new Date().toISOString(), ...args);
+  }
+};
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -22,6 +30,7 @@ const authenticateRequest = (req: express.Request, res: express.Response, next: 
   const configuredApiKey = process.env.API_KEY;
 
   if (!configuredApiKey) {
+    debugLog("Authentication failed: API key not configured");
     return res.status(500).json({
       error: {
         message: "Server configuration error: API key not set",
@@ -31,6 +40,7 @@ const authenticateRequest = (req: express.Request, res: express.Response, next: 
   }
 
   if (!apiKey || apiKey !== configuredApiKey) {
+    debugLog("Authentication failed: Invalid API key provided");
     return res.status(401).json({
       error: {
         message: "Invalid or missing API key",
@@ -98,14 +108,18 @@ class RequestQueue {
   }
 
   async add(requestId: string): Promise<void> {
+    debugLog(`Adding request ${requestId} to queue. Current queue length: ${this.queue.length}`);
     if (this.processing.size < this.maxConcurrent) {
+      debugLog(`Starting processing immediately for ${requestId}`);
       await this.startProcessing(requestId);
     } else {
+      debugLog(`Queue full, adding ${requestId} to waiting queue`);
       this.queue.push(requestId);
     }
   }
 
   private async startProcessing(requestId: string): Promise<void> {
+    debugLog(`Starting to process request ${requestId}`);
     const processPromise = Promise.race([
       this.processRequest(requestId),
       new Promise((_, reject) => 
@@ -120,6 +134,7 @@ class RequestQueue {
     } catch (error) {
       const request = requestStore.get(requestId);
       if (request) {
+        debugLog(`Request ${requestId} timed out after ${requestTimeoutMs}ms`);
         request.status = "error";
         request.error = {
           message: error instanceof Error ? error.message : "Request timeout",
@@ -147,6 +162,7 @@ class RequestQueue {
     ) {
       const nextRequestId = this.queue.shift();
       if (nextRequestId) {
+        debugLog(`Processing next request from queue: ${nextRequestId}`);
         await this.startProcessing(nextRequestId);
       }
     }
@@ -207,10 +223,12 @@ app.get("/health", (req, res) => {
 // Submit chat completion request
 app.post("/v1/chat/completions", async (req, res) => {
   const requestId = nanoid();
+  debugLog(`Received new completion request. ID: ${requestId}`);
 
   // Validate request body
   const result = chatCompletionSchema.safeParse(req.body);
   if (!result.success) {
+    debugLog(`Validation failed for request ${requestId}:`, result.error.errors);
     return res.status(400).json({
       error: {
         message: "Invalid request body",
@@ -317,12 +335,17 @@ async function processRequestWithRetry(
   retryCount = 0
 ): Promise<void> {
   const request = requestStore.get(requestId);
-  if (!request) return;
+  if (!request) {
+    debugLog(`Request ${requestId} not found in store`);
+    return;
+  }
 
   try {
+    debugLog(`Processing request ${requestId} (attempt ${retryCount + 1}/3)`);
     request.status = "processing";
     const completion = await openai.chat.completions.create(params as any);
 
+    debugLog(`Request ${requestId} completed successfully`);
     request.status = "completed";
     request.response = completion;
     
@@ -334,10 +357,11 @@ async function processRequestWithRetry(
       });
     }
   } catch (error: any) {
-    console.error(`OpenAI API Error (attempt ${retryCount + 1}/3):`, error);
+    debugLog(`OpenAI API Error for request ${requestId} (attempt ${retryCount + 1}/3):`, error);
 
     if (retryCount < 2) {
       const delay = Math.pow(2, retryCount) * 1000;
+      debugLog(`Retrying request ${requestId} after ${delay}ms`);
       await new Promise((resolve) => setTimeout(resolve, delay));
       return processRequestWithRetry(requestId, params, retryCount + 1);
     }
@@ -361,4 +385,5 @@ async function processRequestWithRetry(
 
 app.listen(port, () => {
   console.log(`Proxy server running at http://localhost:${port}`);
+  debugLog("Debug mode enabled");
 });
