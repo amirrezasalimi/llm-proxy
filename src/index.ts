@@ -250,7 +250,7 @@ app.post("/v1/chat/completions", async (req, res) => {
   });
 
   // Add to queue for processing
-  await requestQueue.add(requestId);
+    requestQueue.add(requestId);
 
   // Return request ID immediately with queue information
   res.status(202);
