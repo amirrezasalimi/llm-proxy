@@ -8,6 +8,7 @@ import { z } from "zod";
 const app = express();
 const port = process.env.PORT || 3000;
 const maxConcurrent = parseInt(process.env.MAX_CONCURRENT || "2", 10);
+const requestTimeoutMs = parseInt(process.env.REQUEST_TIMEOUT_MS || "300000", 10);
 
 // Initialize OpenAI client
 const openai = new OpenAI({
@@ -89,16 +90,15 @@ const chatCompletionSchema = z.object({
 // Request queue and concurrency management
 class RequestQueue {
   private queue: string[] = [];
-  private processing = new Set<string>();
+  private processing = new Map<string, Promise<void>>();
   private maxConcurrent: number;
-  private processingPromises = new Map<string, Promise<void>>();
 
   constructor(maxConcurrent: number) {
     this.maxConcurrent = maxConcurrent;
   }
 
   async add(requestId: string): Promise<void> {
-    if (this.processingPromises.size < this.maxConcurrent) {
+    if (this.processing.size < this.maxConcurrent) {
       await this.startProcessing(requestId);
     } else {
       this.queue.push(requestId);
@@ -106,13 +106,35 @@ class RequestQueue {
   }
 
   private async startProcessing(requestId: string): Promise<void> {
-    const processPromise = this.processRequest(requestId);
-    this.processingPromises.set(requestId, processPromise);
+    const processPromise = Promise.race([
+      this.processRequest(requestId),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Request timeout")), requestTimeoutMs)
+      )
+    ])
+
+    this.processing.set(requestId, processPromise);
 
     try {
       await processPromise;
+    } catch (error) {
+      const request = requestStore.get(requestId);
+      if (request) {
+        request.status = "error";
+        request.error = {
+          message: error instanceof Error ? error.message : "Request timeout",
+          type: "timeout_error"
+        };
+        
+        // Call webhook with timeout error if URL was provided
+        if (request.webhookUrl) {
+          await callWebhook(requestId, {
+            status: "error",
+            error: request.error,
+          });
+        }
+      }
     } finally {
-      this.processingPromises.delete(requestId);
       this.processing.delete(requestId);
       this.processNext();
     }
@@ -121,7 +143,7 @@ class RequestQueue {
   private async processNext(): Promise<void> {
     while (
       this.queue.length > 0 &&
-      this.processingPromises.size < this.maxConcurrent
+      this.processing.size < this.maxConcurrent
     ) {
       const nextRequestId = this.queue.shift();
       if (nextRequestId) {
@@ -131,7 +153,6 @@ class RequestQueue {
   }
 
   private async processRequest(requestId: string): Promise<void> {
-    this.processing.add(requestId);
     const request = requestStore.get(requestId);
     if (!request) return;
 

@@ -2,10 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 // Helper function to poll request status until completion or timeout
 async function pollRequestStatus(requestId: string, maxAttempts = 10, interval = 1000): Promise<any> {
-  const API_URL = "http://localhost:3000";
+  const API_URL = process.env.API_URL;
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const statusResponse = await fetch(`${API_URL}/v1/chat/completions/${requestId}`);
+    const statusResponse = await fetch(`${API_URL}/v1/chat/completions/${requestId}`, {
+      headers: {
+        "x-api-key": process.env.API_KEY!
+      }
+    });
     const statusData = await statusResponse.json();
     
     console.log(JSON.stringify(statusData,null,2));
@@ -22,7 +26,7 @@ async function pollRequestStatus(requestId: string, maxAttempts = 10, interval =
 }
 
 describe("API Tests", () => {
-  const API_URL = "http://localhost:3000";
+  const API_URL = process.env.API_URL;
 
   test("health check endpoint", async () => {
     const response = await fetch(`${API_URL}/health`);
@@ -39,14 +43,16 @@ describe("API Tests", () => {
     const response = await fetch(`${API_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-api-key": process.env.API_KEY!
       },
       body: JSON.stringify(mockRequest)
     });
 
+    console.log("response",response);
+    
     expect(response.status).toBe(202); // Accepted
     const data = await response.json();
-
     
     expect(data).toHaveProperty("request_id");
 
@@ -71,11 +77,11 @@ describe("API Tests", () => {
     const response = await fetch(`${API_URL}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "x-api-key": process.env.API_KEY!
       },
       body: JSON.stringify(invalidRequest)
     });
-
     expect(response.status).toBe(400);
   });
 });

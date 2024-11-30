@@ -8,6 +8,7 @@ A robust Express-based proxy server for managing Large Language Model API reques
 - **Status Tracking**: Monitor request status (pending, processing, completed, error)
 - **Rate Limiting**: Built-in request queue with configurable concurrency
 - **Error Handling**: Automatic retry mechanism for failed requests
+- **Request Timeout**: Configurable timeout for processing requests
 - **Webhook Support**: Optional callbacks when requests complete or fail
 - **OpenAI Integration**: Pre-configured for OpenAI API with customizable endpoints
 - **Type Safety**: Built with TypeScript for robust type checking
@@ -40,6 +41,7 @@ OPENAI_API_KEY=your-api-key-here
 OPENAI_API_BASE_URL=your-endpoint-here
 MAX_CONCURRENT=2
 API_KEY=your-proxy-api-key-here
+REQUEST_TIMEOUT_MS=300000
 ```
 
 ## Usage
