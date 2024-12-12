@@ -31,7 +31,7 @@ RUN bun install --production
 # Copy the rest of the application code
 COPY src ./src
 COPY tsconfig.json .
-COPY .env.production .env
+# COPY .env.production .env
 
 # Set environment variables
 ENV NODE_ENV=production
